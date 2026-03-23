@@ -1,0 +1,117 @@
+from pyspark.sql import functions as F
+from pyspark.sql.window import Window
+
+# LOAD
+df = spark.read.format("dataiku").load("SRW_contrat_manufacturers_filtered_v2")
+
+# ===== STEP 1 : Dates =====
+df = df.withColumn("kldto", F.to_timestamp("kldto")) \
+       .withColumn("kldtes", F.to_timestamp("kldtes")) \
+       .withColumn("ktdtvr", F.to_timestamp("ktdtvr")) \
+       .withColumn("kldty1", F.to_timestamp("kldty1"))
+
+# ===== STEP 2 : Years =====
+df = df.withColumn("End_Year", F.year("ktdtvr")) \
+       .withColumn("Effective_End_Year", F.year("kldtes")) \
+       .withColumn("Quarter_Effective_End_Year", F.concat_ws("-", F.year("kldtes"), F.quarter("kldtes")))
+
+# fillna kldtes
+df = df.withColumn("kldtes", F.coalesce("kldtes", F.lit("1900-01-01").cast("timestamp")))
+
+# Early termination
+df = df.withColumn(
+    "Is_Early_Terminated_Contract",
+    F.col("kldtes") < F.col("kldto")
+)
+
+# drop duplicates
+df = df.dropDuplicates(["Key"])
+
+# fill years
+df = df.fillna({"End_Year": 0, "Effective_End_Year": 0})
+
+# ===== STEP 3 : contracts_ter =====
+contracts_ter = df.filter(F.col("klstm1") == "ENDED")
+
+contracts_ter_keep = contracts_ter.select(
+    "ktctct", "klnufi", "tech_country", "Key",
+    "ennusr", "ktpeca", "Cod_Mat", "kldtes",
+    "Manufacturer", "uilbrl", "ktprkt",
+    "Quarter_Effective_End_Year", "Is_Early_Terminated_Contract"
+)
+
+# ===== STEP 4 : JOIN =====
+merge_df = df.join(
+    contracts_ter_keep,
+    on=["ennusr", "Cod_Mat", "tech_country"],
+    how="inner"
+)
+
+# ===== STEP 5 : diff_months =====
+def diff_months(col1, col2):
+    return F.months_between(col1, col2)
+
+merge_df = merge_df.withColumn(
+    "Renewal_Timing_Months",
+    diff_months(F.col("kldty1"), F.col("kldtes"))
+)
+
+# filter >= -1
+merge_df = merge_df.filter(F.col("Renewal_Timing_Months") >= -1)
+
+# ===== STEP 6 : sort + groupby first =====
+window_key = Window.partitionBy("Key").orderBy(
+    F.col("tech_country"),
+    F.col("Key"),
+    F.col("kldtes").desc()
+)
+
+merge_df = merge_df.withColumn("rn", F.row_number().over(window_key))
+renewed_contracts = merge_df.filter(F.col("rn") == 1).drop("rn")
+
+# ===== STEP 7 : second groupby =====
+window_key_old = Window.partitionBy("Key_old").orderBy(
+    F.col("tech_country"),
+    F.col("Key_old"),
+    F.col("klstm1"),
+    F.col("kldty1")
+)
+
+renewed_contracts = renewed_contracts.withColumn("rn2", F.row_number().over(window_key_old))
+renewed_contracts = renewed_contracts.filter(F.col("rn2") == 1).drop("rn2")
+
+# flag
+renewed_contracts = renewed_contracts.withColumn("Is_Renewed", F.lit(True))
+
+# ===== STEP 8 : SELECT colonnes =====
+contracts_renewed = renewed_contracts.select(
+    "Key", "Key_old", "ktctct_old", "klnufi_old", "ktpeca_old",
+    "kldtes_old", "Manufacturer_old", "uilbrl_old", "ktprkt_old",
+    "Quarter_Effective_End_Year_old", "Is_Early_Terminated_Contract_old",
+    "Renewal_Timing_Months", "Is_Renewed"
+)
+
+# ===== STEP 9 : LEFT JOIN =====
+final_df = df.join(contracts_renewed, on="Key", how="left")
+
+final_df = final_df.withColumn(
+    "Is_Renewed",
+    F.coalesce("Is_Renewed", F.lit(False))
+)
+
+# ===== STEP 10 : conditions =====
+final_df = final_df.withColumn(
+    "Is_Renewed_On_Same_Manufacturer",
+    F.when(F.col("Is_Renewed") == True,
+           F.col("Manufacturer") == F.col("Manufacturer_old"))
+)
+
+final_df = final_df.withColumn(
+    "Is_Renewed_On_Same_Fin_Prdt",
+    F.when(F.col("Is_Renewed") == True,
+           F.col("uilbrl") == F.col("uilbrl_old"))
+)
+
+# ===== RESULT =====
+final_df.show(5)
+print(final_df.count())
