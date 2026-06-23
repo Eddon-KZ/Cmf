@@ -1,0 +1,71 @@
+# -*- coding: utf-8 -*-
+import dataiku
+import pandas as pd
+
+# =============================================================================
+# Read recipe inputs
+# =============================================================================
+
+# Main dataset: keep all columns for the output
+contrat_df = dataiku.Dataset(
+    "SRW_contrat_manufacturers_filtered_v2"
+).get_dataframe()
+
+# Client dataset: load only useful columns
+client_df = (
+    dataiku.Dataset("SRW_c_clienp_v2")
+    .get_dataframe(columns=["clpers", "id_fiscal_ita"])
+    .rename(columns={"clpers": "ktpecc"})
+)
+
+# =============================================================================
+# Prepare join keys
+# =============================================================================
+
+contrat_df["ktpecc"] = contrat_df["ktpecc"].astype(str)
+client_df["ktpecc"] = client_df["ktpecc"].astype(str)
+
+# =============================================================================
+# Join with client table
+# =============================================================================
+
+contrat_df = contrat_df.merge(
+    client_df,
+    on="ktpecc",
+    how="left"
+)
+
+# =============================================================================
+# Replace Client SIREN by Italian fiscal ID for Italy only
+# =============================================================================
+
+mask_ita = (
+    (contrat_df["tech_country"] == "ITA")
+    & contrat_df["id_fiscal_ita"].notna()
+    & (contrat_df["id_fiscal_ita"] != "")
+)
+
+contrat_df.loc[mask_ita, "ennusr"] = (
+    contrat_df.loc[mask_ita, "id_fiscal_ita"]
+)
+
+# =============================================================================
+# Cleanup
+# =============================================================================
+
+contrat_df.drop(
+    columns=["id_fiscal_ita"],
+    inplace=True
+)
+
+# =============================================================================
+# Write recipe output
+# =============================================================================
+
+output_dataset = dataiku.Dataset(
+    "SRW_contrat_manufacturers_filtered_v3"
+)
+
+output_dataset.write_with_schema(
+    contrat_df
+)
