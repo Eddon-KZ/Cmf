@@ -1,36 +1,5 @@
--- Date calculée
 SELECT
-    date_trunc('month', CURRENT_TIMESTAMP)
-    - make_interval(months => 1) AS archive_cutoff_date;
-
--- Nombre de lignes concernées
-SELECT COUNT(*)
-FROM ave_api_logs
-WHERE "timestamp"::timestamp <
-(
-    date_trunc('month', CURRENT_TIMESTAMP)
-    - make_interval(months => 1)
-);
-
-SELECT
-    MIN(CAST("timestamp" AS timestamp)) AS first_deleted,
-    MAX(CAST("timestamp" AS timestamp)) AS last_deleted
-FROM ave_api_logs
-WHERE "timestamp" <> 'Timestamp'
-  AND CAST("timestamp" AS timestamp) <
-      date_trunc('month', CURRENT_TIMESTAMP)
-      - interval '1 month';
-
-
-DELETE FROM ave_api_logs
-WHERE "timestamp" <> 'Timestamp'
-  AND CAST("timestamp" AS timestamp) <
-      date_trunc('month', CURRENT_TIMESTAMP)
-      - interval '1 month';
-
-
-
-SELECT
+    date_trunc('month', CURRENT_TIMESTAMP) - interval '1 month' AS archive_cutoff_date,
     COUNT(*) AS rows_to_delete,
     MIN(CAST("timestamp" AS timestamp)) AS first_deleted,
     MAX(CAST("timestamp" AS timestamp)) AS last_deleted
