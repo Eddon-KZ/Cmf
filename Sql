@@ -1,0 +1,24 @@
+-- Date calculée
+SELECT
+    date_trunc('month', CURRENT_TIMESTAMP)
+    - make_interval(months => 1) AS archive_cutoff_date;
+
+-- Nombre de lignes concernées
+SELECT COUNT(*)
+FROM ave_api_logs
+WHERE "timestamp" <
+(
+    date_trunc('month', CURRENT_TIMESTAMP)
+    - make_interval(months => 1)
+);
+
+-- Vérification des bornes
+SELECT
+    MIN("timestamp") AS first_deleted,
+    MAX("timestamp") AS last_deleted
+FROM ave_api_logs
+WHERE "timestamp" <
+(
+    date_trunc('month', CURRENT_TIMESTAMP)
+    - make_interval(months => 1)
+);
