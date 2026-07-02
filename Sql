@@ -20,3 +20,10 @@ WHERE "timestamp" <> 'Timestamp'
   AND CAST("timestamp" AS timestamp) <
       date_trunc('month', CURRENT_TIMESTAMP)
       - interval '1 month';
+
+
+DELETE FROM ave_api_logs
+WHERE "timestamp" <> 'Timestamp'
+  AND CAST("timestamp" AS timestamp) <
+      date_trunc('month', CURRENT_TIMESTAMP)
+      - interval '1 month';
