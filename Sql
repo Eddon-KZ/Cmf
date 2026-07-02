@@ -6,7 +6,7 @@ SELECT
 -- Nombre de lignes concernées
 SELECT COUNT(*)
 FROM ave_api_logs
-WHERE "timestamp" <
+WHERE "timestamp"::timestamp <
 (
     date_trunc('month', CURRENT_TIMESTAMP)
     - make_interval(months => 1)
@@ -14,10 +14,10 @@ WHERE "timestamp" <
 
 -- Vérification des bornes
 SELECT
-    MIN("timestamp") AS first_deleted,
-    MAX("timestamp") AS last_deleted
+    MIN("timestamp"::timestamp) AS first_deleted,
+    MAX("timestamp"::timestamp) AS last_deleted
 FROM ave_api_logs
-WHERE "timestamp" <
+WHERE "timestamp"::timestamp <
 (
     date_trunc('month', CURRENT_TIMESTAMP)
     - make_interval(months => 1)
