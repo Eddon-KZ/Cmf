@@ -1,0 +1,17 @@
+print("\n===== Périodes présentes =====")
+
+tmp = source_df.copy()
+tmp["year_month"] = tmp[TIMESTAMP_COLUMN].dt.strftime("%Y-%m")
+
+print(
+    tmp["year_month"]
+    .value_counts()
+    .sort_index()
+)
+
+print("\nDate min :", tmp[TIMESTAMP_COLUMN].min())
+print("Date max :", tmp[TIMESTAMP_COLUMN].max())
+
+
+print(source_df[TIMESTAMP_COLUMN].min())
+print(source_df[TIMESTAMP_COLUMN].max())
