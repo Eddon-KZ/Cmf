@@ -12,13 +12,11 @@ WHERE "timestamp"::timestamp <
     - make_interval(months => 1)
 );
 
--- Vérification des bornes
 SELECT
-    MIN("timestamp"::timestamp) AS first_deleted,
-    MAX("timestamp"::timestamp) AS last_deleted
+    MIN(CAST("timestamp" AS timestamp)) AS first_deleted,
+    MAX(CAST("timestamp" AS timestamp)) AS last_deleted
 FROM ave_api_logs
-WHERE "timestamp"::timestamp <
-(
-    date_trunc('month', CURRENT_TIMESTAMP)
-    - make_interval(months => 1)
-);
+WHERE "timestamp" <> 'Timestamp'
+  AND CAST("timestamp" AS timestamp) <
+      date_trunc('month', CURRENT_TIMESTAMP)
+      - interval '1 month';
