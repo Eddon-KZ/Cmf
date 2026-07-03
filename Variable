@@ -1,0 +1,10 @@
+from dataiku import api_client
+
+client = api_client()
+project = client.get_default_project()
+
+variables = project.get_variables()
+variables["standard"]["archive_cutoff_date"] = archive_cutoff_date.strftime("%Y-%m-%d %H:%M:%S")
+project.set_variables(variables)
+
+logger.info(f"Project variable archive_cutoff_date = {archive_cutoff_date}")
