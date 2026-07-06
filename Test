@@ -15,3 +15,19 @@ print("Date max :", tmp[TIMESTAMP_COLUMN].max())
 
 print(source_df[TIMESTAMP_COLUMN].min())
 print(source_df[TIMESTAMP_COLUMN].max())
+
+
+
+if(
+    now().substring(8,10) < "12",
+    concat(
+        now().inc(-2,"month").substring(5,7),
+        "-",
+        now().inc(-2,"month").substring(0,4)
+    ),
+    concat(
+        now().inc(-1,"month").substring(5,7),
+        "-",
+        now().inc(-1,"month").substring(0,4)
+    )
+)
