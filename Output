@@ -1,0 +1,12 @@
+archive_folder = dataiku.Folder("8rkeLvGG")   # ID de ton Managed Folder
+
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+filename = f"api_logs_archive_{timestamp}.parquet"
+
+buffer = io.BytesIO()
+
+archive_df.to_parquet(buffer, index=False)
+
+archive_folder.upload_data(filename, buffer.getvalue())
+
+logger.info(f"Archive written to Managed Folder: {filename}")
