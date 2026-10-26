@@ -1,0 +1,28 @@
+# ============================================================
+# 3. CONVERSION DES NANOS EN STRING
+# ============================================================
+
+def convert_timestamp(value):
+
+    if pd.isna(value):
+        return None
+
+    # Timestamp stocké en nanosecondes
+    if isinstance(value, numbers.Number):
+        dt = pd.to_datetime(
+            value,
+            unit="ns",
+            errors="raise"
+        )
+    else:
+        # Au cas où une valeur texte existe
+        dt = pd.to_datetime(
+            value,
+            errors="raise"
+        )
+
+    # Retour au format texte d'origine, sans timezone
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.%f")
+
+
+df["timestamp"] = df["timestamp"].apply(convert_timestamp)
