@@ -1,0 +1,216 @@
+import dataiku
+import pandas as pd
+import io
+import numbers
+
+# ============================================================
+# 1. Accès au Managed Folder
+# ============================================================
+
+folder = dataiku.Folder("ID_DU_FOLDER")
+
+files = folder.list_paths_in_partition()
+
+print("Fichiers trouvés dans le folder :")
+for f in files:
+    print(" -", f)
+
+
+# ============================================================
+# 2. Noms des deux fichiers
+# ============================================================
+
+old_file = "api_logs_archive_20261023_142059.parquet"
+new_file = "api_logs_archive_20261026_173155.parquet"
+
+
+# Vérification présence
+if old_file not in files:
+    raise Exception(f"Ancien fichier introuvable : {old_file}")
+
+if new_file not in files:
+    raise Exception(f"Nouveau fichier introuvable : {new_file}")
+
+
+# ============================================================
+# 3. Lecture des deux Parquet
+# ============================================================
+
+with folder.get_download_stream(old_file) as stream:
+    df_old = pd.read_parquet(io.BytesIO(stream.read()))
+
+with folder.get_download_stream(new_file) as stream:
+    df_new = pd.read_parquet(io.BytesIO(stream.read()))
+
+
+print("\n==============================")
+print("1. NOMBRE DE LIGNES")
+print("==============================")
+
+print("Ancien :", len(df_old))
+print("Nouveau:", len(df_new))
+
+if len(df_old) == len(df_new):
+    print("✅ OK : même nombre de lignes")
+else:
+    print("❌ ERREUR : nombre de lignes différent")
+
+
+# ============================================================
+# 4. Vérification des colonnes
+# ============================================================
+
+print("\n==============================")
+print("2. COLONNES")
+print("==============================")
+
+print("Ancien :", list(df_old.columns))
+print("Nouveau:", list(df_new.columns))
+
+if list(df_old.columns) == list(df_new.columns):
+    print("✅ OK : mêmes colonnes, même ordre")
+else:
+    print("❌ ERREUR : colonnes différentes")
+
+
+# ============================================================
+# 5. Vérification de toutes les colonnes SAUF timestamp
+# ============================================================
+
+print("\n==============================")
+print("3. COMPARAISON DES DONNÉES")
+print("(hors timestamp)")
+print("==============================")
+
+columns_without_timestamp = [
+    c for c in df_old.columns if c != "timestamp"
+]
+
+if df_old[columns_without_timestamp].equals(
+    df_new[columns_without_timestamp]
+):
+    print("✅ OK : toutes les autres données sont IDENTIQUES")
+else:
+    print("❌ ERREUR : une ou plusieurs données ont changé")
+
+    # Recherche des différences
+    for col in columns_without_timestamp:
+        differences = df_old[col] != df_new[col]
+
+        if differences.any():
+            print(f"\n❌ Différences dans la colonne : {col}")
+            print(
+                pd.DataFrame({
+                    "ancien": df_old.loc[differences, col],
+                    "nouveau": df_new.loc[differences, col]
+                }).head(10)
+            )
+
+
+# ============================================================
+# 6. Vérification du timestamp
+# ============================================================
+
+print("\n==============================")
+print("4. COMPARAISON DES TIMESTAMPS")
+print("==============================")
+
+
+def normalize_old_timestamp(value):
+    if pd.isna(value):
+        return None
+
+    if isinstance(value, numbers.Number):
+        dt = pd.to_datetime(
+            value,
+            unit="ns",
+            errors="raise"
+        )
+    else:
+        dt = pd.to_datetime(
+            value,
+            errors="raise"
+        )
+
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.%f")
+
+
+old_timestamp_normalized = (
+    df_old["timestamp"]
+    .apply(normalize_old_timestamp)
+)
+
+new_timestamp = (
+    df_new["timestamp"]
+    .astype("string")
+)
+
+
+timestamp_differences = (
+    old_timestamp_normalized.astype("string")
+    != new_timestamp
+)
+
+number_timestamp_differences = timestamp_differences.sum()
+
+print("Nombre de timestamps différents :",
+      number_timestamp_differences)
+
+if number_timestamp_differences == 0:
+    print("✅ OK : TOUS les timestamps correspondent")
+else:
+    print("❌ ERREUR : certains timestamps ne correspondent pas")
+
+    print("\nExemples de différences :")
+
+    comparison = pd.DataFrame({
+        "ancien_converti": old_timestamp_normalized,
+        "nouveau": new_timestamp
+    })
+
+    print(
+        comparison.loc[timestamp_differences]
+        .head(20)
+    )
+
+
+# ============================================================
+# 7. Quelques exemples
+# ============================================================
+
+print("\n==============================")
+print("5. EXEMPLES DE TIMESTAMPS")
+print("==============================")
+
+comparison = pd.DataFrame({
+    "ancien_converti": old_timestamp_normalized,
+    "nouveau": new_timestamp
+})
+
+print(comparison.head(10))
+
+
+# ============================================================
+# 8. RÉSULTAT FINAL
+# ============================================================
+
+print("\n==========================================")
+print("RÉSULTAT FINAL")
+print("==========================================")
+
+data_ok = (
+    len(df_old) == len(df_new)
+    and list(df_old.columns) == list(df_new.columns)
+    and df_old[columns_without_timestamp].equals(
+        df_new[columns_without_timestamp]
+    )
+    and number_timestamp_differences == 0
+)
+
+if data_ok:
+    print("✅✅✅ COMPARAISON OK ✅✅✅")
+    print("Les deux fichiers contiennent les mêmes données.")
+    print("Seul le format du timestamp a été corrigé.")
+else:
+    print("❌❌❌ COMPARAISON NON OK ❌❌❌")
+    print("Il existe au moins une différence.")
