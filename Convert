@@ -1,0 +1,74 @@
+import dataiku
+import pandas as pd
+import io
+
+# ============================================================
+# 1. Récupération du Managed Folder
+# ============================================================
+
+folder = dataiku.Folder("api_logs_archive")
+
+# Liste des fichiers présents dans le folder
+files = folder.list_paths_in_partition()
+
+print("Fichiers trouvés dans le folder :")
+for f in files:
+    print(" -", f)
+
+# On prend le fichier Parquet
+parquet_file = [f for f in files if f.endswith(".parquet")][0]
+
+print("\nFichier utilisé :", parquet_file)
+
+
+# ============================================================
+# 2. Lecture du fichier Parquet
+# ============================================================
+
+with folder.get_download_stream(parquet_file) as stream:
+    parquet_bytes = stream.read()
+
+df = pd.read_parquet(io.BytesIO(parquet_bytes))
+
+print("\nNombre de lignes :", len(df))
+print("Colonnes :", list(df.columns))
+print("Type actuel de timestamp :", df["timestamp"].dtype)
+
+
+# ============================================================
+# 3. Conversion du timestamp
+# ============================================================
+
+def convert_timestamp(value):
+
+    if pd.isna(value):
+        return pd.NaT
+
+    # Cas timestamp numérique Unix en nanosecondes
+    if isinstance(value, (int, float)):
+        return pd.to_datetime(value, unit="ns", errors="raise")
+
+    # Cas timestamp déjà sous forme texte
+    return pd.to_datetime(value, errors="raise")
+
+
+df_test = df.copy()
+
+df_test["timestamp"] = df_test["timestamp"].apply(convert_timestamp)
+
+
+# ============================================================
+# 4. Affichage du résultat
+# ============================================================
+
+print("\nType de timestamp après conversion :")
+print(df_test["timestamp"].dtype)
+
+print("\nQuelques timestamps après conversion :")
+print(df_test["timestamp"].head(20))
+
+print("\nTypes après conversion :")
+print(df_test["timestamp"].apply(type).value_counts())
+
+print("\nAperçu du DataFrame corrigé :")
+display(df_test.head(20))
