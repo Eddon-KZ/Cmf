@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import dataiku
 import pandas as pd
 import io
@@ -5,33 +7,41 @@ import numbers
 
 
 # ============================================================
-# 1. LECTURE DU FICHIER ORIGINAL
+# 1. LECTURE DU MANAGED FOLDER ORIGINAL
 # ============================================================
 
-ARCHIVE_FOLDER = dataiku.Folder("api_logs_archive")
+api_logs_archive = dataiku.Folder("8rkelVGG")
 
-files = ARCHIVE_FOLDER.list_paths_in_partition()
+files = api_logs_archive.list_paths_in_partition()
 
 parquet_files = [f for f in files if f.endswith(".parquet")]
 
 if len(parquet_files) != 1:
     raise Exception(
-        f"Nombre de fichiers Parquet inattendu : {len(parquet_files)}"
+        f"Nombre de fichiers Parquet inattendu dans api_logs_archive : "
+        f"{len(parquet_files)}"
     )
 
 parquet_file = parquet_files[0]
 
 print(f"Fichier lu : {parquet_file}")
 
-with ARCHIVE_FOLDER.get_download_stream(parquet_file) as stream:
-    df = pd.read_parquet(io.BytesIO(stream.read()))
+
+# ============================================================
+# 2. LECTURE DU PARQUET
+# ============================================================
+
+with api_logs_archive.get_download_stream(parquet_file) as stream:
+    parquet_bytes = stream.read()
+
+df = pd.read_parquet(io.BytesIO(parquet_bytes))
 
 print(f"Nombre de lignes : {len(df)}")
 print(f"Type timestamp avant correction : {df['timestamp'].dtype}")
 
 
 # ============================================================
-# 2. CONVERSION DE TOUS LES TIMESTAMPS
+# 3. CONVERSION DE TOUS LES TIMESTAMPS
 # ============================================================
 
 def convert_timestamp(value):
@@ -40,26 +50,38 @@ def convert_timestamp(value):
         return pd.NaT
 
     # Cas 1 : timestamp numérique en nanosecondes
-    # Exemple : 1787054485336196000
+    # Exemple :
+    # 1787054485336196000
+    # 1696516200000000000
     if isinstance(value, numbers.Number):
-        return pd.to_datetime(value, unit="ns", errors="raise")
+        return pd.to_datetime(
+            value,
+            unit="ns",
+            errors="raise"
+        )
 
-    # Cas 2 : timestamp texte
-    # Exemple : 2026-01-30T10:19:49.092335
-    return pd.to_datetime(value, errors="raise")
+    # Cas 2 : timestamp sous forme de texte
+    # Exemple :
+    # 2026-01-30T10:19:49.092335
+    # ou
+    # 2023-10-05 14:32:00
+    return pd.to_datetime(
+        value,
+        errors="raise"
+    )
 
 
 df["timestamp"] = df["timestamp"].apply(convert_timestamp)
 
 
 # ============================================================
-# 3. VERIFICATION
+# 4. VERIFICATIONS
 # ============================================================
 
 print("\nType timestamp après correction :")
 print(df["timestamp"].dtype)
 
-print("\nQuelques timestamps après correction :")
+print("\nPremiers timestamps après correction :")
 print(df["timestamp"].head(20))
 
 print("\nNombre de timestamps NULL :")
@@ -67,12 +89,14 @@ print(df["timestamp"].isna().sum())
 
 
 # ============================================================
-# 4. ECRITURE DANS LE DATASET TEMPORAIRE
+# 5. ECRITURE DANS LE DATASET TEMPORAIRE
 # ============================================================
 
-OUTPUT_DATASET = dataiku.Dataset("api_logs_archive_test")
+api_logs_archive_test = dataiku.Dataset("api_logs_archive_test")
 
-OUTPUT_DATASET.write_with_schema(df)
+api_logs_archive_test.write_with_schema(df)
 
-print("\nCorrection terminée.")
-print("Dataset corrigé : api_logs_archive_test")
+print("\n==========================================")
+print("CORRECTION TERMINEE")
+print("Output : api_logs_archive_test")
+print("==========================================")
